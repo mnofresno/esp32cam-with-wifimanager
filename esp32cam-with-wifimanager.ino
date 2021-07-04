@@ -1,21 +1,4 @@
-/*********
-  Rui Santos
-  Complete project details at https://RandomNerdTutorials.com/esp32-cam-video-streaming-web-server-camera-home-assistant/
-  
-  IMPORTANT!!! 
-   - Select Board "AI Thinker ESP32-CAM"
-   - GPIO 0 must be connected to GND to upload a sketch
-   - After connecting GPIO 0 to GND, press the ESP32-CAM on-board RESET button to put your board in flashing mode
-  
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files.
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-*********/
-
 #include "esp_camera.h"
-#include <WiFi.h>
 #include "esp_timer.h"
 #include "img_converters.h"
 #include "Arduino.h"
@@ -24,9 +7,9 @@
 #include "soc/rtc_cntl_reg.h"  //disable brownout problems
 #include "esp_http_server.h"
 
-// Replace with your network credentials
-const char* ssid     = "set here the SSID";
-const char* password = "set here the AP Password";
+#include <WiFiManager.h>
+
+WiFiManager wm;
 
 #define PART_BOUNDARY "123456789000000000000987654321"
 
@@ -37,7 +20,6 @@ const char* password = "set here the AP Password";
 
 // Not tested with this model
 //#define CAMERA_MODEL_WROVER_KIT
-
 #if defined(CAMERA_MODEL_WROVER_KIT)
   #define PWDN_GPIO_NUM    -1
   #define RESET_GPIO_NUM   -1
@@ -199,12 +181,7 @@ void startCameraServer(){
   }
 }
 
-void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
- 
-  Serial.begin(115200);
-  Serial.setDebugOutput(false);
-  
+void initializeCamera() {
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -243,17 +220,34 @@ void setup() {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
-  // Connect to Wi-Fi network with SSID and password
-  Serial.print("Setting AP (Access Point)…");
-  // Remove the password parameter, if you want the AP (Access Point) to be open
-  WiFi.softAP(ssid, password);
+}
 
-  IPAddress IP = WiFi.softAPIP();
-  Serial.print("Camera Stream Ready! Connect to the ESP32 AP and go to: http://");
-  Serial.println(IP);
-  
-  // Start streaming web server
-  startCameraServer();
+void initializeWifi() {
+  wm.setConfigPortalBlocking(false);
+  bool res;
+
+  res = wm.autoConnect(); // password protected ap
+
+  if(!res) {
+      Serial.println("Failed to connect");
+      // ESP.restart();
+  } 
+  else {
+      //if you get here you have connected to the WiFi    
+      Serial.println("connected...yeey :)");
+      initializeCamera();
+      // Start streaming web server
+      startCameraServer();
+  }
+  wm.setHttpPort(8080);
+  wm.startConfigPortal();
+}
+
+void setup() { 
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
+  Serial.begin(115200);
+  Serial.setDebugOutput(false);
+  initializeWifi();
 }
 
 void loop() {
